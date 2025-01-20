@@ -5,9 +5,13 @@
 ///////////////////////////////////////////////////////
 
 #include "HomeSpan.h"
+#include <AsyncTCP.h>
+#include <ArduinoJson.h>
 
 #define MIN_TEMP 0  // minimum allowed temperature in celsius
 #define MAX_TEMP 40 // maximum allowed temperature in celsius
+
+AsyncClient* tcpClient;
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -194,6 +198,29 @@ struct Reference_Thermostat : Service::Thermostat
    }
 };
 
+
+void statusCallback(HS_STATUS status)
+{
+   if (status == HS_PAIRED)
+   {
+      Serial.println("Starting AsyncTCP client");
+      tcpClient = new AsyncClient();
+
+      tcpClient->onConnect([](void* arg, AsyncClient* client) {
+         Serial.println("AsyncTCP connected to host");
+
+         client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
+            Serial.printf("** data received by client: %" PRIu16 ": len=%u\n", client->localPort(), len);
+         });
+
+         client->write("GET /\r\n\r\n");
+      });
+
+      IPAddress addr("192.168.68.123");
+      tcpClient->connect("192.168.68.123", 3000);
+
+   }
+}
 ////////////////////////////////////////////////////////////////////////
 
 void setup()
@@ -201,6 +228,7 @@ void setup()
    delay(3000);
    Serial.begin(115200);
 
+   homeSpan.setStatusCallback(statusCallback);
    homeSpan.setStatusPixel(35, 200.0, 100.0, 100.0);
    homeSpan.begin(Category::Thermostats, "HomeSpan Thermostat");
 
