@@ -211,6 +211,10 @@ void statusCallback(HS_STATUS status)
 
          client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
             Serial.printf("** data received by client: %" PRIu16 ": len=%u\n", client->localPort(), len);
+
+            std::string str = std::string((char*) data, len);
+            Serial.println("Received: ");
+            Serial.println(String(str.c_str()));
          });
 
          client->write("GET /\r\n\r\n");
