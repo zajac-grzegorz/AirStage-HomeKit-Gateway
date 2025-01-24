@@ -7,11 +7,14 @@
 #include "HomeSpan.h"
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
+#include <asyncHTTPrequest.h>
 
 #define MIN_TEMP 0  // minimum allowed temperature in celsius
 #define MAX_TEMP 40 // maximum allowed temperature in celsius
 
-AsyncClient* tcpClient;
+// AsyncClient* tcpClient;
+
+asyncHTTPrequest request;
 
 ////////////////////////////////////////////////////////////////////////
 
@@ -198,34 +201,58 @@ struct Reference_Thermostat : Service::Thermostat
    }
 };
 
+void sendRequest()
+{
+    if(request.readyState() == 0 || request.readyState() == 4){
+        request.open("GET", "192.168.68.124:3000");
+        request.send();
+    }
+}
 
 void statusCallback(HS_STATUS status)
 {
    if (status == HS_PAIRED)
    {
       Serial.println("Starting AsyncTCP client");
-      tcpClient = new AsyncClient();
+      // tcpClient = new AsyncClient();
 
-      tcpClient->onConnect([](void* arg, AsyncClient* client) {
-         Serial.println("AsyncTCP connected to host");
+      // tcpClient->onConnect([](void* arg, AsyncClient* client) {
+      //    Serial.println("AsyncTCP connected to host");
 
-         client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
-            Serial.printf("** data received by client: %" PRIu16 ": len=%u\n", client->localPort(), len);
+      //    client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
+      //       Serial.printf("** data received by client: %" PRIu16 ": len=%u\n", client->localPort(), len);
 
-            std::string str = std::string((char*) data, len);
-            Serial.println("Received: ");
-            Serial.println(String(str.c_str()));
-         });
+      //       std::string str = std::string((char*) data, len);
+      //       Serial.println("Received: ");
+      //       Serial.println(String(str.c_str()));
+      //    });
 
-         client->write("GET /\r\n\r\n");
-      });
+      //    client->write("GET /\r\n\r\n");
+      // });
 
-      IPAddress addr("192.168.68.123");
-      tcpClient->connect("192.168.68.123", 3000);
+      // IPAddress addr("192.168.68.123");
+      // tcpClient->connect("192.168.68.123", 3000);
 
+      sendRequest();
    }
 }
 ////////////////////////////////////////////////////////////////////////
+
+void requestCB(void* optParm, asyncHTTPrequest* request, int readyState)
+{
+    if(readyState == 4)
+    {
+        String res = request->responseText();
+        Serial.println(res);
+        Serial.println();
+        request->setDebug(false);
+
+        JsonDocument doc;
+        
+        deserializeJson(doc, res);
+        serializeJson(doc, Serial);
+    }
+}
 
 void setup()
 {
@@ -241,6 +268,9 @@ void setup()
    new Characteristic::Identify();
 
    new Reference_Thermostat();
+
+   request.setDebug(true);
+   request.onReadyStateChange(requestCB);
 }
 
 ////////////////////////////////////////////////////////////////////////
