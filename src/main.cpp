@@ -9,8 +9,11 @@
 #include <ArduinoJson.h>
 #include <asyncHTTPrequest.h>
 
-#define MIN_TEMP 0  // minimum allowed temperature in celsius
-#define MAX_TEMP 40 // maximum allowed temperature in celsius
+#include <WebServer.h>                    // include WebServer library
+WebServer webServer(80);                  // create WebServer on port 80
+
+#define MIN_TEMP 18  // minimum allowed temperature in celsius
+#define MAX_TEMP 25 // maximum allowed temperature in celsius
 
 // AsyncClient* tcpClient;
 
@@ -249,9 +252,20 @@ void requestCB(void* optParm, asyncHTTPrequest* request, int readyState)
 
         JsonDocument doc;
         
-        deserializeJson(doc, res);
+        deserializeJson(doc, res.c_str());
         serializeJson(doc, Serial);
     }
+}
+
+void setupWeb(int ev)
+{
+   Serial.println("Starting web server");
+   webServer.begin();
+
+   webServer.on("/", []() 
+   {
+      webServer.send(200, "text/html", "Hello, world");
+   });
 }
 
 void setup()
@@ -261,13 +275,29 @@ void setup()
 
    homeSpan.setStatusCallback(statusCallback);
    homeSpan.setStatusPixel(35, 200.0, 100.0, 100.0);
-   homeSpan.begin(Category::Thermostats, "HomeSpan Thermostat");
+   homeSpan.setPortNum(8080);
+   homeSpan.setConnectionCallback(setupWeb);
+   homeSpan.begin(Category::Thermostats, "ReApartment Thermostat");
 
    new SpanAccessory();
-   new Service::AccessoryInformation();
-   new Characteristic::Identify();
+      new Service::AccessoryInformation();
+         new Characteristic::Identify();
 
-   new Reference_Thermostat();
+      new Reference_Thermostat();
+   
+      new Service::Fan();                             // Create the Fan Service
+         new Characteristic::Active();                   // This Service requires the "Active" Characterstic to turn the fan on and off
+         new Characteristic::CurrentFanState();
+         new Characteristic::TargetFanState();
+         new Characteristic::RotationSpeed();
+
+      new Service::TemperatureSensor();
+         new Characteristic::CurrentTemperature(21.0);
+         new Characteristic::ConfiguredName("Inside"); 
+      
+      new Service::TemperatureSensor();
+         new Characteristic::CurrentTemperature(18.0);
+         new Characteristic::ConfiguredName("Outside"); 
 
    request.setDebug(true);
    request.onReadyStateChange(requestCB);
@@ -278,6 +308,7 @@ void setup()
 void loop()
 {
    homeSpan.poll();
+   webServer.handleClient();           // handle incoming web server traffic
 }
 
 ////////////////////////////////////////////////////////////////////////
