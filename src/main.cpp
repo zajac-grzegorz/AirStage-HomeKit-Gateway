@@ -207,7 +207,7 @@ struct Reference_Thermostat : Service::Thermostat
 void sendRequest()
 {
     if(request.readyState() == 0 || request.readyState() == 4){
-        request.open("GET", "192.168.68.124:3000");
+        request.open("GET", "192.168.68.125:3000");
         request.send();
     }
 }
@@ -277,11 +277,16 @@ void setup()
    homeSpan.setStatusPixel(35, 200.0, 100.0, 100.0);
    homeSpan.setPortNum(8080);
    homeSpan.setConnectionCallback(setupWeb);
+   homeSpan.enableWebLog(10,"pool.ntp.org","UTC","myLog");           // creates a web log on the URL /HomeSpan-[DEVICE-ID].local:[TCP-PORT]/myLog
    homeSpan.begin(Category::Thermostats, "ReApartment Thermostat");
 
    new SpanAccessory();
       new Service::AccessoryInformation();
          new Characteristic::Identify();
+
+      new Service::Switch();
+         new Characteristic::On();
+         new Characteristic::ConfiguredName("Aircon On/Off");
 
       new Reference_Thermostat();
    
