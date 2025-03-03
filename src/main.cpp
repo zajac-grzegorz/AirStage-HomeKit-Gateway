@@ -19,6 +19,13 @@ WebServer webServer(80);                  // create WebServer on port 80
 
 asyncHTTPrequest request;
 
+void sendRequest()
+{
+    if(request.readyState() == 0 || request.readyState() == 4){
+        request.open("GET", "192.168.68.125:3000");
+        request.send();
+    }
+}
 ////////////////////////////////////////////////////////////////////////
 
 // Here we create a dummmy temperature sensor that can be used as a real sensor in the Thermostat Service below.
@@ -89,6 +96,8 @@ struct Reference_Thermostat : Service::Thermostat
             Serial.printf("Thermostat set to AUTO from %s to %s\n", temp2String(heatingThreshold.getVal<float>()).c_str(), temp2String(coolingThreshold.getVal<float>()).c_str());
             break;
          }
+
+         sendRequest();
       }
 
       if (heatingThreshold.updated() || coolingThreshold.updated())
@@ -203,14 +212,6 @@ struct Reference_Thermostat : Service::Thermostat
       return (t);
    }
 };
-
-void sendRequest()
-{
-    if(request.readyState() == 0 || request.readyState() == 4){
-        request.open("GET", "192.168.68.125:3000");
-        request.send();
-    }
-}
 
 void statusCallback(HS_STATUS status)
 {
