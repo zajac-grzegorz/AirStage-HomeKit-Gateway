@@ -7,53 +7,24 @@
 #include "HomeSpan.h"
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
-#include <asyncHTTPrequest.h>
-
+#include <Preferences.h>
 #include <WebServer.h>                    // include WebServer library
-WebServer webServer(80);                  // create WebServer on port 80
+#include "AirConConfig.h"
+#include "AirConData.h"
+#include "AirConClient.h"
 
-#define MIN_TEMP 18  // minimum allowed temperature in celsius
-#define MAX_TEMP 25 // maximum allowed temperature in celsius
+Preferences prefs;
 
-// AsyncClient* tcpClient;
+WebServer webServer(AIRCON_WEBSERVER_PORT);                  // create WebServer on port 80
 
-asyncHTTPrequest request;
+AirConClient* client = nullptr;
 
-void sendRequest()
-{
-    if(request.readyState() == 0 || request.readyState() == 4){
-        request.open("GET", "192.168.68.125:3000");
-        request.send();
-    }
-}
-////////////////////////////////////////////////////////////////////////
-
-// Here we create a dummmy temperature sensor that can be used as a real sensor in the Thermostat Service below.
-// Rather than read a real temperature sensor, this structure allows you to change the current temperature via the Serial Monitor
-
-struct DummyTempSensor
-{
-   static float temp;
-
-   DummyTempSensor(float t)
-   {
-      temp = t;
-      new SpanUserCommand('f', "<temp> - set the temperature, where temp is in degrees F", [](const char *buf)
-                          { temp = (atof(buf + 1) - 32.0) / 1.8; });
-      new SpanUserCommand('c', "<temp> - set the temperature, where temp is in degrees C", [](const char *buf)
-                          { temp = atof(buf + 1); });
-   }
-
-   float read() { return (temp); }
-};
-
-float DummyTempSensor::temp;
+SpanCharacteristic* outsideTemp;
+SpanCharacteristic* insideTemp;
 
 ////////////////////////////////////////////////////////////////////////
-
 struct Reference_Thermostat : Service::Thermostat
 {
-
    // Create characteristics, set initial values, and set storage in NVS to true
 
    Characteristic::CurrentHeatingCoolingState currentState{0, true};
@@ -64,50 +35,47 @@ struct Reference_Thermostat : Service::Thermostat
    Characteristic::CoolingThresholdTemperature coolingThreshold{22, true};
    Characteristic::TemperatureDisplayUnits displayUnits{0, true}; // this is for changing the display on the actual thermostat (if any), NOT in the Home App
 
-   DummyTempSensor tempSensor{22}; // instantiate a dummy temperature sensor with initial temp=22 degrees C
-
    Reference_Thermostat() : Service::Thermostat()
    {
-      Serial.printf("\n*** Creating HomeSpan Thermostat***\n");
+      LOG1("*** Creating HomeSpan Thermostat***");
 
-      currentTemp.setRange(MIN_TEMP, MAX_TEMP); // set all ranges the same to make sure Home App displays them correctly on the same dial
-      targetTemp.setRange(MIN_TEMP, MAX_TEMP);
-      heatingThreshold.setRange(MIN_TEMP, MAX_TEMP);
-      coolingThreshold.setRange(MIN_TEMP, MAX_TEMP);
+      currentTemp.setRange(AIRCON_MIN_TEMP, AIRCON_MAX_TEMP); // set all ranges the same to make sure Home App displays them correctly on the same dial
+      targetTemp.setRange(AIRCON_MIN_TEMP, AIRCON_MAX_TEMP);
+      heatingThreshold.setRange(AIRCON_MIN_TEMP, AIRCON_MAX_TEMP);
+      coolingThreshold.setRange(AIRCON_MIN_TEMP, AIRCON_MAX_TEMP);
    }
 
    boolean update() override
    {
-
       if (targetState.updated())
       {
          switch (targetState.getNewVal())
          {
          case 0:
-            Serial.printf("Thermostat turning OFF\n");
+            LOG1("Thermostat turning OFF");
             break;
          case 1:
-            Serial.printf("Thermostat set to HEAT at %s\n", temp2String(targetTemp.getVal<float>()).c_str());
+            LOG1("Thermostat set to HEAT at %s", temp2String(targetTemp.getVal<float>()).c_str());
             break;
          case 2:
-            Serial.printf("Thermostat set to COOL at %s\n", temp2String(targetTemp.getVal<float>()).c_str());
+            LOG1("Thermostat set to COOL at %s", temp2String(targetTemp.getVal<float>()).c_str());
             break;
          case 3:
-            Serial.printf("Thermostat set to AUTO from %s to %s\n", temp2String(heatingThreshold.getVal<float>()).c_str(), temp2String(coolingThreshold.getVal<float>()).c_str());
+            LOG1("Thermostat set to AUTO from %s to %s", temp2String(heatingThreshold.getVal<float>()).c_str(), temp2String(coolingThreshold.getVal<float>()).c_str());
             break;
          }
 
-         sendRequest();
+         // client->getParams();
       }
 
       if (heatingThreshold.updated() || coolingThreshold.updated())
-         Serial.printf("Temperature range changed to %s to %s\n", temp2String(heatingThreshold.getNewVal<float>()).c_str(), temp2String(coolingThreshold.getNewVal<float>()).c_str());
+         LOG1("Temperature range changed to %s to %s", temp2String(heatingThreshold.getNewVal<float>()).c_str(), temp2String(coolingThreshold.getNewVal<float>()).c_str());
 
       else if (targetTemp.updated())
-         Serial.printf("Temperature target changed to %s\n", temp2String(targetTemp.getNewVal<float>()).c_str());
+         LOG1("Temperature target changed to %s", temp2String(targetTemp.getNewVal<float>()).c_str());
 
       if (displayUnits.updated())
-         Serial.printf("Display Units changed to %c\n", displayUnits.getNewVal() ? 'F' : 'C');
+         LOG1("Display Units changed to %c", displayUnits.getNewVal() ? 'F' : 'C');
 
       return (true);
    }
@@ -117,17 +85,38 @@ struct Reference_Thermostat : Service::Thermostat
    void loop() override
    {
 
-      float temp = tempSensor.read(); // read temperature sensor (which in this example is just a dummy sensor)
+      float temp = acSetTemp.load() / 10.0; // make it float
+      
+      // limit value to stay between MIN_TEMP and MAX_TEMP
+      temp = constrain(temp, AIRCON_MIN_TEMP, AIRCON_MAX_TEMP);
 
-      if (temp < MIN_TEMP) // limit value to stay between MIN_TEMP and MAX_TEMP
-         temp = MIN_TEMP;
-      if (temp > MAX_TEMP)
-         temp = MAX_TEMP;
+      // if (temp < MIN_TEMP) 
+      //    temp = MIN_TEMP;
+      // if (temp > MAX_TEMP)
+      //    temp = MAX_TEMP;
 
       if (currentTemp.timeVal() > 5000 && fabs(currentTemp.getVal<float>() - temp) > 0.25)
       { // if it's been more than 5 seconds since last update, and temperature has changed
          currentTemp.setVal(temp);
-         Serial.printf("Current Temperature is now %s.\n", temp2String(currentTemp.getNewVal<float>()).c_str());
+         LOG1("Current Temperature is now %s.", temp2String(currentTemp.getNewVal<float>()).c_str());
+      }
+
+      float inTemp = (acInsideTemp.load() - 5000) / 100.0; // normalize and make it float
+      inTemp = constrain(inTemp, AIRCON_MIN_TEMP, AIRCON_MAX_TEMP);
+
+      if (insideTemp->timeVal() > 5000 && fabs(insideTemp->getVal<float>() - inTemp) > 0.25)
+      { // if it's been more than 5 seconds since last update, and temperature has changed
+         insideTemp->setVal(inTemp);
+         LOG1("Inside Temperature is now %s.", temp2String(insideTemp->getNewVal<float>()).c_str());
+      }
+
+      float outTemp = (acOutsideTemp.load() - 5000) / 100.0; // normalize and make it float
+      outTemp = constrain(outTemp, AIRCON_MIN_TEMP, AIRCON_MAX_TEMP);
+
+      if (outsideTemp->timeVal() > 5000 && fabs(outsideTemp->getVal<float>() - outTemp) > 0.25)
+      { // if it's been more than 5 seconds since last update, and temperature has changed
+         outsideTemp->setVal(outTemp);
+         LOG1("Outside Temperature is now %s.", temp2String(outsideTemp->getNewVal<float>()).c_str());
       }
 
       switch (targetState.getVal())
@@ -136,7 +125,7 @@ struct Reference_Thermostat : Service::Thermostat
       case 0:
          if (currentState.getVal() != 0)
          {
-            Serial.printf("Thermostat OFF\n");
+            LOG1("Thermostat OFF");
             currentState.setVal(0);
          }
          break;
@@ -144,17 +133,17 @@ struct Reference_Thermostat : Service::Thermostat
       case 1:
          if (currentTemp.getVal<float>() < targetTemp.getVal<float>() && currentState.getVal() != 1)
          {
-            Serial.printf("Turning HEAT ON\n");
+            LOG1("Turning HEAT ON");
             currentState.setVal(1);
          }
          else if (currentTemp.getVal<float>() >= targetTemp.getVal<float>() && currentState.getVal() == 1)
          {
-            Serial.printf("Turning HEAT OFF\n");
+            LOG1("Turning HEAT OFF");
             currentState.setVal(0);
          }
          else if (currentState.getVal() == 2)
          {
-            Serial.printf("Turning COOL OFF\n");
+            LOG1("Turning COOL OFF");
             currentState.setVal(0);
          }
          break;
@@ -162,17 +151,17 @@ struct Reference_Thermostat : Service::Thermostat
       case 2:
          if (currentTemp.getVal<float>() > targetTemp.getVal<float>() && currentState.getVal() != 2)
          {
-            Serial.printf("Turning COOL ON\n");
+            LOG1("Turning COOL ON");
             currentState.setVal(2);
          }
          else if (currentTemp.getVal<float>() <= targetTemp.getVal<float>() && currentState.getVal() == 2)
          {
-            Serial.printf("Turning COOL OFF\n");
+            LOG1("Turning COOL OFF");
             currentState.setVal(0);
          }
          else if (currentState.getVal() == 1)
          {
-            Serial.printf("Turning HEAT OFF\n");
+            LOG1("Turning HEAT OFF");
             currentState.setVal(0);
          }
          break;
@@ -180,23 +169,23 @@ struct Reference_Thermostat : Service::Thermostat
       case 3:
          if (currentTemp.getVal<float>() < heatingThreshold.getVal<float>() && currentState.getVal() != 1)
          {
-            Serial.printf("Turning HEAT ON\n");
+            LOG1("Turning HEAT ON");
             currentState.setVal(1);
          }
          else if (currentTemp.getVal<float>() >= heatingThreshold.getVal<float>() && currentState.getVal() == 1)
          {
-            Serial.printf("Turning HEAT OFF\n");
+            LOG1("Turning HEAT OFF");
             currentState.setVal(0);
          }
 
          if (currentTemp.getVal<float>() > coolingThreshold.getVal<float>() && currentState.getVal() != 2)
          {
-            Serial.printf("Turning COOL ON\n");
+            LOG1("Turning COOL ON");
             currentState.setVal(2);
          }
          else if (currentTemp.getVal<float>() <= coolingThreshold.getVal<float>() && currentState.getVal() == 2)
          {
-            Serial.printf("Turning COOL OFF\n");
+            LOG1("Turning COOL OFF");
             currentState.setVal(0);
          }
          break;
@@ -204,7 +193,6 @@ struct Reference_Thermostat : Service::Thermostat
    }
 
    // This "helper" function makes it easy to display temperatures on the serial monitor in either F or C depending on TemperatureDisplayUnits
-
    String temp2String(float temp)
    {
       String t = displayUnits.getVal() ? String(round(temp * 1.8 + 32.0)) : String(temp);
@@ -217,56 +205,73 @@ void statusCallback(HS_STATUS status)
 {
    if (status == HS_PAIRED)
    {
-      Serial.println("Starting AsyncTCP client");
-      // tcpClient = new AsyncClient();
-
-      // tcpClient->onConnect([](void* arg, AsyncClient* client) {
-      //    Serial.println("AsyncTCP connected to host");
-
-      //    client->onData([](void* arg, AsyncClient* client, void* data, size_t len) {
-      //       Serial.printf("** data received by client: %" PRIu16 ": len=%u\n", client->localPort(), len);
-
-      //       std::string str = std::string((char*) data, len);
-      //       Serial.println("Received: ");
-      //       Serial.println(String(str.c_str()));
-      //    });
-
-      //    client->write("GET /\r\n\r\n");
-      // });
-
-      // IPAddress addr("192.168.68.123");
-      // tcpClient->connect("192.168.68.123", 3000);
-
-      sendRequest();
+      WEBLOG("Starting AsyncTCP client");
+      client = new AirConClient();
+      // client->start();
    }
 }
 ////////////////////////////////////////////////////////////////////////
 
-void requestCB(void* optParm, asyncHTTPrequest* request, int readyState)
+void getCharacteristicsCallback(const char* getCharList)
 {
-    if(readyState == 4)
-    {
-        String res = request->responseText();
-        Serial.println(res);
-        Serial.println();
-        request->setDebug(false);
-
-        JsonDocument doc;
-        
-        deserializeJson(doc, res.c_str());
-        serializeJson(doc, Serial);
-    }
+   homeSpan.processSerialCommand("@g");
 }
+////////////////////////////////////////////////////////////////////////
 
 void setupWeb(int ev)
 {
-   Serial.println("Starting web server");
+   WEBLOG("Starting web server");
    webServer.begin();
 
    webServer.on("/", []() 
    {
-      webServer.send(200, "text/html", "Hello, world");
+      prefs.begin("CUST_DATA", false);
+      String addr = prefs.getString("acaddr", AIRCON_DEFAULT_URL);
+      String port = prefs.getString("acport", AIRCON_DEFAULT_PORT);
+      prefs.end();
+
+      String content = "<html><body><form action='/setup' method='POST'>Setup connection with Air Conditioner<br><br>";
+      content += "URL address of Air Con:<input type='text' name='AIRCONADDR' placeholder='" + addr + "'><br>";
+      content += "URL port of Air Con:<input type='text' name='AIRCONPORT' placeholder='" + port + "'><br>";
+      content += "<input type='submit' name='SUBMIT' value='Submit'></form><br>";
+      webServer.send(200, "text/html", content);
    });
+
+   webServer.on("/setup", []() 
+   {
+      if (webServer.hasArg("AIRCONADDR"))
+      {
+         prefs.begin("CUST_DATA", false);
+         prefs.putString("acaddr", webServer.arg("AIRCONADDR"));
+         prefs.putString("acport", webServer.arg("AIRCONPORT"));
+         prefs.end();
+
+         String content = "<html><body><p>URL address and port saved...</p>";
+         webServer.send(200, "text/html", content);
+
+         WEBLOG("Saving the aircon URL address (%s) and port (%s)", 
+            webServer.arg("AIRCONADDR").c_str(), webServer.arg("AIRCONPORT").c_str());
+      }
+   });
+
+   webServer.onNotFound([]() 
+   {
+      String message = "File Not Found\n\n";
+      message += "URI: ";
+      message += webServer.uri();
+      message += "\nMethod: ";
+      message += (webServer.method() == HTTP_GET) ? "GET" : "POST";
+      message += "\nArguments: ";
+      message += webServer.args();
+      message += "\n";
+    
+      for (uint8_t i = 0; i < webServer.args(); i++) {
+        message += " " + webServer.argName(i) + ": " + webServer.arg(i) + "\n";
+      }
+    
+      webServer.send(404, "text/plain", message);
+    });
+
 }
 
 void setup()
@@ -275,38 +280,55 @@ void setup()
    Serial.begin(115200);
 
    homeSpan.setStatusCallback(statusCallback);
+   homeSpan.setGetCharacteristicsCallback(getCharacteristicsCallback);
    homeSpan.setStatusPixel(35, 200.0, 100.0, 100.0);
+   homeSpan.setControlPin(41, PushButton::TRIGGER_ON_LOW);
+   homeSpan.setStatusAutoOff(120);
    homeSpan.setPortNum(8080);
    homeSpan.setConnectionCallback(setupWeb);
-   homeSpan.enableWebLog(10,"pool.ntp.org","UTC","myLog");           // creates a web log on the URL /HomeSpan-[DEVICE-ID].local:[TCP-PORT]/myLog
-   homeSpan.begin(Category::Thermostats, "ReApartment Thermostat");
+   homeSpan.setLogLevel(1);
+   homeSpan.enableWebLog(20,"pool.ntp.org", "UTC", "weblog");           // creates a web log on the URL /HomeSpan-[DEVICE-ID].local:[TCP-PORT]/myLog
+   homeSpan.enableWatchdog(30); // enable HomeSpan watchdog with timeout of 30 seconds
+   homeSpan.setPairingCode(AIRCON_HOMEKIT_PAIRING_CODE); // set pairing code to 1980-1980
+   homeSpan.begin(Category::Bridges, AIRCON_HOMEKIT_BRIDGE_NAME);
+
+   new SpanUserCommand('g', "get all parameters from AirCon", [](const char *buf) { 
+      client->start(); 
+   });
 
    new SpanAccessory();
       new Service::AccessoryInformation();
          new Characteristic::Identify();
 
+   new SpanAccessory();
+      new Service::AccessoryInformation();
+         new Characteristic::Identify();
+         new Characteristic::Name("Fujitsu AirCon"); 
+      
+      new Reference_Thermostat();
+      
       new Service::Switch();
          new Characteristic::On();
-         new Characteristic::ConfiguredName("Aircon On/Off");
+         new Characteristic::ConfiguredName("Dry Mode");
 
-      new Reference_Thermostat();
-   
+      new Service::Switch();
+         new Characteristic::On();
+         new Characteristic::ConfiguredName("Fan Only Mode");   
+
       new Service::Fan();                             // Create the Fan Service
-         new Characteristic::Active();                   // This Service requires the "Active" Characterstic to turn the fan on and off
+         new Characteristic::Active();                // This Service requires the "Active" Characterstic to turn the fan on and off
          new Characteristic::CurrentFanState();
          new Characteristic::TargetFanState();
          new Characteristic::RotationSpeed();
+         new Characteristic::ConfiguredName("Fan Speed");
 
       new Service::TemperatureSensor();
-         new Characteristic::CurrentTemperature(21.0);
-         new Characteristic::ConfiguredName("Inside"); 
+         insideTemp = new Characteristic::CurrentTemperature(21.0);
+         new Characteristic::ConfiguredName("Inside Temp"); 
       
       new Service::TemperatureSensor();
-         new Characteristic::CurrentTemperature(18.0);
-         new Characteristic::ConfiguredName("Outside"); 
-
-   request.setDebug(true);
-   request.onReadyStateChange(requestCB);
+         outsideTemp = new Characteristic::CurrentTemperature(18.0);
+         new Characteristic::ConfiguredName("Outside Temp"); 
 }
 
 ////////////////////////////////////////////////////////////////////////
