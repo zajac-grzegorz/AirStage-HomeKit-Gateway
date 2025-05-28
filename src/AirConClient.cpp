@@ -25,6 +25,12 @@ AirConClient::~AirConClient()
 
 void AirConClient::start()
 {
+   if (nullptr != client)
+   {
+      LOG1("WARNING: One request already sent\n");
+      return;
+   }
+
    client = new AsyncClient();
 
    // register event handlers
@@ -57,11 +63,11 @@ void AirConClient::getParams()
 
    JsonDocument doc;
 
-   doc["device_id"] = AIRCON_DEVICE_ID;
+   doc["device_id"] = AIRCON_JSON_DEVICE_ID;
    doc["device_sub_id"] = 0;
    doc["req_id"] = "1";
    doc["modified_by"] = "";
-   doc["set_level"] = "03";
+   doc["set_level"] = AIRCON_JSON_LEVEL_GET;
    doc["list"].add(iu_onoff);
    doc["list"].add(iu_op_mode);
    doc["list"].add(iu_fan_spd);
@@ -77,7 +83,7 @@ void AirConClient::getParams()
    initLine.reserve(50);
 
    initLine = "POST /";
-   initLine += STR_GET_PARAM;
+   initLine += AIRCON_GET_PARAM;
    initLine += " HTTP/1.1\r\n";
    
    String hostHeaderLine;
@@ -112,22 +118,27 @@ void AirConClient::setAirConMode(bool on, int mode)
    LOG1("On/Off: %d, mode %d\n", on, mode);
 }
 
-void AirConClient::connectHandler(void *arg, AsyncClient *client)
+void AirConClient::connectHandler(void *arg, AsyncClient *cl)
 {
    LOG1("Connected to AirCon host\n");
    getParams();
 }
 
-void AirConClient::disconnectHandler(void *arg, AsyncClient *client)
+void AirConClient::disconnectHandler(void *arg, AsyncClient *cl)
 {
    LOG1("Disconnected from AirCon host\n");
    delete client;
+   client = nullptr;
+
+   LOG1("Header status: ");
+   String statusLine = content->substring(0, content->indexOf("\r\n"));
+   String statusCode = statusLine.substring(statusLine.indexOf(" ") + 1, statusLine.lastIndexOf(" "));
+   String statusReason = statusLine.substring(statusLine.lastIndexOf(" ") + 1);
+   LOG1("%s, %s\n\n", statusCode.c_str(), statusReason.c_str());
 
    LOG1("Final data:\n");
-
-   String res = content->substring(content->lastIndexOf("\r\n") + 2).c_str();
+   String res = content->substring(content->lastIndexOf("\r\n") + 2);
    content->clear();
-
    LOG1("%s\n\n", res.c_str());
 
    JsonDocument doc;
@@ -152,12 +163,12 @@ void AirConClient::disconnectHandler(void *arg, AsyncClient *client)
    LOG1("Temp in: %d, temp out %d, temp set %d\n", acInsideTemp.load(), acOutsideTemp.load(), acSetTemp.load());
 }
 
-void AirConClient::errorHandler(void *arg, AsyncClient *client, int8_t error)
+void AirConClient::errorHandler(void *arg, AsyncClient *cl, int8_t error)
 {
    LOG1("Error AirCon host [%d]\n", error);
 }
 
-void AirConClient::dataHandler(void *arg, AsyncClient *client, void *data, size_t len)
+void AirConClient::dataHandler(void *arg, AsyncClient *cl, void *data, size_t len)
 {
    LOG1("Data received from AirCon host\n");
    LOG1("[%s] Received %u bytes...\n", host.c_str(), len);

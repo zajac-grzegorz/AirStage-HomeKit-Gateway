@@ -28,8 +28,8 @@ enum class FanSpeed
    FS_HIGH = 11
 };
 
-inline std::atomic<int> acInsideTemp(0);
-inline std::atomic<int> acOutsideTemp(0);
+inline std::atomic<int> acInsideTemp(7000);     // 20 degrees C
+inline std::atomic<int> acOutsideTemp(7000);    // 20 degrees C
 inline std::atomic<int> acSetTemp(0);
 inline std::atomic<int> acFanSpeed((int) FanSpeed::FS_AUTO);
 inline std::atomic<int> acAirConMode((int) AirConMode::AC_OFF);

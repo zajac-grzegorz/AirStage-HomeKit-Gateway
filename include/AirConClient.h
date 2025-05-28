@@ -6,8 +6,8 @@
 #include <StreamString.h>
 #include "AirConData.h"
 
-#define STR_GET_PARAM "GetParam" 
-#define STR_SET_PARAM "SetParam"
+#define AIRCON_GET_PARAM "GetParam" 
+#define AIRCON_SET_PARAM "SetParam"
 
 #define AC_CLIENT_MAX_RECEIVE_BUF 1000
 
@@ -38,8 +38,8 @@ private:
    String host;
    uint16_t port;
 
-   void connectHandler(void* arg, AsyncClient* client);
-   void disconnectHandler(void* arg, AsyncClient* client);
-   void errorHandler(void* arg, AsyncClient* client, int8_t error);
-   void dataHandler(void* arg, AsyncClient* client, void* data, size_t len);
+   void connectHandler(void* arg, AsyncClient* cl);
+   void disconnectHandler(void* arg, AsyncClient* cl);
+   void errorHandler(void* arg, AsyncClient* cl, int8_t error);
+   void dataHandler(void* arg, AsyncClient* cl, void* data, size_t len);
 };
