@@ -15,13 +15,20 @@ struct InsideTemperature : Service::TemperatureSensor
    void loop() override
    {
       // Normalize and make it float
-      float inTemp = (acInsideTemp.load() - AIRCON_TEMP_MODIFIER) / AIRCON_TEMP_DIVIDER; 
+      // float inTemp = (acInsideTemp.load() - AIRCON_TEMP_MODIFIER) / AIRCON_TEMP_DIVIDER; 
 
-      // If it's been more than 5 seconds since last update, and temperature has changed
-      if (insideTemp.timeVal() > AIRCON_UPDATE_TIME_ELAPSED && fabs(insideTemp.getVal<float>() - inTemp) > AIRCON_UPDATE_DELTA)
+      // If it's been more than X seconds since last update, and temperature has changed
+      // if (insideTemp.timeVal() > AIRCON_UPDATE_TIME_ELAPSED && fabs(insideTemp.getVal<float>() - inTemp) > AIRCON_UPDATE_DELTA)
+      if (insideTemp.timeVal() > AIRCON_UPDATE_TIME_ELAPSED) 
       {
-         insideTemp.setVal(inTemp);
-         LOG1("Inside Temperature is now %.2f\n", insideTemp.getNewVal<float>());
+         // Normalize and make it float
+         float inTemp = (acInsideTemp.load() - AIRCON_TEMP_MODIFIER) / AIRCON_TEMP_DIVIDER;
+
+         if (fabs(insideTemp.getVal<float>() - inTemp) > AIRCON_UPDATE_DELTA)
+         {
+            insideTemp.setVal(inTemp);
+            LOG1("Inside Temperature is now %.2f\n", insideTemp.getNewVal<float>());
+         }
       }
    }
 };

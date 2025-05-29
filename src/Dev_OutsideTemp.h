@@ -14,14 +14,17 @@ struct OutsideTemperature : Service::TemperatureSensor
 
    void loop() override
    {
-      // Normalize and make it float
-      float outTemp = (acOutsideTemp.load() - AIRCON_TEMP_MODIFIER) / AIRCON_TEMP_DIVIDER; 
+      // If it's been more than X seconds since last update, and temperature has changed
+      if (outsideTemp.timeVal() > AIRCON_UPDATE_TIME_ELAPSED)
+      {
+         // Normalize and make it float
+         float outTemp = (acOutsideTemp.load() - AIRCON_TEMP_MODIFIER) / AIRCON_TEMP_DIVIDER;
 
-      // If it's been more than 5 seconds since last update, and temperature has changed
-      if (outsideTemp.timeVal() > AIRCON_UPDATE_TIME_ELAPSED && fabs(outsideTemp.getVal<float>() - outTemp) > AIRCON_UPDATE_DELTA)
-      { 
-         outsideTemp.setVal(outTemp);
-         LOG1("Outside Temperature is now %.2f\n", outsideTemp.getNewVal<float>());
+         if (fabs(outsideTemp.getVal<float>() - outTemp) > AIRCON_UPDATE_DELTA)
+         {
+            outsideTemp.setVal(outTemp);
+            LOG1("Outside Temperature is now %.2f\n", outsideTemp.getNewVal<float>());
+         }
       }
    }
 };

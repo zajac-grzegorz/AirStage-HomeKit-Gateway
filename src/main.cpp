@@ -1,9 +1,3 @@
-///////////////////////////////////////////////////////
-//                                                   //
-//   HomeSpan Reference Sketch: Thermostat Service   //
-//                                                   //
-///////////////////////////////////////////////////////
-
 #include "HomeSpan.h"
 #include <AsyncTCP.h>
 #include <ArduinoJson.h>
@@ -12,7 +6,10 @@
 #include "AirConConfig.h"
 #include "AirConData.h"
 #include "AirConClient.h"
-#include "DEV_AirConThermostat.h"
+#include "Dev_AirConFan.h"
+#include "Dev_AirConThermostat.h"
+#include "Dev_DryModeSwitch.h"
+#include "Dev_FanOnlyModeSwitch.h"
 #include "Dev_InsideTemp.h"
 #include "Dev_OutsideTemp.h"
 
@@ -44,9 +41,9 @@ void setupWeb(int ev)
 
    webServer.on("/", []() 
    {
-      prefs.begin("CUST_DATA", false);
-      String addr = prefs.getString("acaddr", AIRCON_DEFAULT_URL);
-      String port = prefs.getString("acport", AIRCON_DEFAULT_PORT);
+      prefs.begin(AIRCON_PREFS_CUSTOM_DATA, false);
+      String addr = prefs.getString(AIRCON_KEY_ADDR, AIRCON_DEFAULT_URL);
+      String port = prefs.getString(AIRCON_KEY_PORT, AIRCON_DEFAULT_PORT);
       prefs.end();
 
       String content = "<html><body><form action='/setup' method='POST'>Setup connection with Air Conditioner<br><br>";
@@ -60,9 +57,9 @@ void setupWeb(int ev)
    {
       if (webServer.hasArg("AIRCONADDR"))
       {
-         prefs.begin("CUST_DATA", false);
-         prefs.putString("acaddr", webServer.arg("AIRCONADDR"));
-         prefs.putString("acport", webServer.arg("AIRCONPORT"));
+         prefs.begin(AIRCON_PREFS_CUSTOM_DATA, false);
+         prefs.putString(AIRCON_KEY_ADDR, webServer.arg("AIRCONADDR"));
+         prefs.putString(AIRCON_KEY_PORT, webServer.arg("AIRCONPORT"));
          prefs.end();
 
          String content = "<html><body><p>URL address and port saved...</p>";
@@ -130,22 +127,9 @@ void setup()
          new Characteristic::Name("Fujitsu AirCon"); 
       
       new AirConThermostat();
-      
-      new Service::Switch();
-         new Characteristic::On();
-         new Characteristic::ConfiguredName("Dry Mode");
-
-      new Service::Switch();
-         new Characteristic::On();
-         new Characteristic::ConfiguredName("Fan Only Mode");   
-
-      new Service::Fan();                             // Create the Fan Service
-         new Characteristic::Active();                // This Service requires the "Active" Characterstic to turn the fan on and off
-         new Characteristic::CurrentFanState();
-         new Characteristic::TargetFanState();
-         new Characteristic::RotationSpeed();
-         new Characteristic::ConfiguredName("Fan Speed");
-
+      new DryModeSwitch();
+      new FanOnlyModeSwitch();
+      new AirConFan();
       new InsideTemperature();
       new OutsideTemperature();
 }

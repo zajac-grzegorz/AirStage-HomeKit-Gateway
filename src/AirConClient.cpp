@@ -7,9 +7,9 @@ AirConClient::AirConClient()
    content = new StreamString();
    content->reserve(AC_CLIENT_MAX_RECEIVE_BUF);
 
-   prefs.begin("CUST_DATA", true);
-   host = prefs.getString("acaddr", AIRCON_DEFAULT_URL);
-   port = prefs.getString("acport", AIRCON_DEFAULT_PORT).toInt();
+   prefs.begin(AIRCON_PREFS_CUSTOM_DATA, true);
+   host = prefs.getString(AIRCON_KEY_ADDR, AIRCON_DEFAULT_URL);
+   port = prefs.getString(AIRCON_KEY_PORT, AIRCON_DEFAULT_PORT).toInt();
    prefs.end();
 
    LOG1("AirCon url: %s:%d\n", host.c_str(), port);
@@ -49,7 +49,7 @@ void AirConClient::start()
 
    if (!client->connect(host.c_str(), port)) 
    {
-      LOG1("[%s] Failed to connect!\n", host.c_str());
+      LOG1("ERROR: Failed to connect [%s]\n", host.c_str());
    }
 }
 
@@ -57,7 +57,7 @@ void AirConClient::getParams()
 {
    if (!client)
    {
-      LOG1("CLIENT not initialized\n");
+      LOG1("ERROR: Client not initialized\n");
       return;
    }
 
@@ -130,11 +130,10 @@ void AirConClient::disconnectHandler(void *arg, AsyncClient *cl)
    delete client;
    client = nullptr;
 
-   LOG1("Header status: ");
    String statusLine = content->substring(0, content->indexOf("\r\n"));
    String statusCode = statusLine.substring(statusLine.indexOf(" ") + 1, statusLine.lastIndexOf(" "));
    String statusReason = statusLine.substring(statusLine.lastIndexOf(" ") + 1);
-   LOG1("%s, %s\n\n", statusCode.c_str(), statusReason.c_str());
+   LOG1("Header status: %s, %s\n\n", statusCode.c_str(), statusReason.c_str());
 
    LOG1("Final data:\n");
    String res = content->substring(content->lastIndexOf("\r\n") + 2);
@@ -165,13 +164,12 @@ void AirConClient::disconnectHandler(void *arg, AsyncClient *cl)
 
 void AirConClient::errorHandler(void *arg, AsyncClient *cl, int8_t error)
 {
-   LOG1("Error AirCon host [%d]\n", error);
+   LOG1("ERROR: AirCon host [%d]\n", error);
 }
 
 void AirConClient::dataHandler(void *arg, AsyncClient *cl, void *data, size_t len)
 {
-   LOG1("Data received from AirCon host\n");
-   LOG1("[%s] Received %u bytes...\n", host.c_str(), len);
+   LOG1("Received %u bytes from AirCon host [%s]\n", len, host.c_str());
 
    content->write((const uint8_t*) data, len);
 }

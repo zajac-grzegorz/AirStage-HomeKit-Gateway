@@ -19,3 +19,8 @@
 
 #define AIRCON_TEMP_MODIFIER 5000
 #define AIRCON_TEMP_DIVIDER 100.0
+
+// NVS properties constants
+#define AIRCON_PREFS_CUSTOM_DATA "CUST_DATA"
+#define AIRCON_KEY_ADDR "acaddr"
+#define AIRCON_KEY_PORT "acport"
