@@ -14,6 +14,6 @@ struct FanOnlyModeSwitch : Service::Switch
 
    void loop() override
    {
-      
+      onOff.setVal((0 == acFanOnlyMode.load()) ? Characteristic::On::OFF : Characteristic::On::ON);
    }
 };

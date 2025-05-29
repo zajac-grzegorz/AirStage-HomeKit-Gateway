@@ -113,9 +113,54 @@ void AirConClient::setParams()
 {
 }
 
-void AirConClient::setAirConMode(bool on, int mode)
+void AirConClient::setAirConMode(bool on, OperationMode mode)
 {
-   LOG1("On/Off: %d, mode %d\n", on, mode);
+   LOG1("On/Off: %d, mode %d\n", on, (int) mode);
+
+   acDryMode.store(false);
+   acFanOnlyMode.store(false);
+
+   // AirCon is completely turned off
+   if (!on)
+   {
+      acAirConMode.store((int) AirConMode::AC_OFF);
+      
+      if (OperationMode::OP_DRY == mode)
+      {
+         acDryMode.store(true);
+      }
+      else if ((OperationMode::OP_FAN == mode))
+      {
+         acFanOnlyMode.store(true);
+      }
+   }
+   // AirCon is turned on - one of the modes are active
+   else
+   {
+      switch (mode)
+      {
+         case OperationMode::OP_AUTO:
+            acAirConMode.store((int) AirConMode::AC_AUTO);
+            break;
+         case OperationMode::OP_COOL:
+            acAirConMode.store((int) AirConMode::AC_COOL);
+            break;
+         case OperationMode::OP_DRY:
+            acAirConMode.store((int) AirConMode::AC_AUTO);
+            acDryMode.store(true);
+            break;
+         case OperationMode::OP_FAN:
+            acAirConMode.store((int) AirConMode::AC_AUTO);
+            acFanOnlyMode.store(true);
+            break;
+         case OperationMode::OP_HEAT:
+            acAirConMode.store((int) AirConMode::AC_HEAT);
+            break;
+      }
+   }
+
+   LOG1("ON_OFF: %d, OP_MODE: %d, AC_MODE: %d, DRY_MODE: %d, FAN_ONLY_MODE: %d\n\n",
+      on, (int) mode, acAirConMode.load(), acDryMode.load(), acFanOnlyMode.load());
 }
 
 void AirConClient::connectHandler(void *arg, AsyncClient *cl)
@@ -157,7 +202,7 @@ void AirConClient::disconnectHandler(void *arg, AsyncClient *cl)
    acOutsideTemp.store(outTmpStr.toInt());
    acSetTemp.store(setTmpStr.toInt());
    acFanSpeed.store(fanSpdStr.toInt());
-   setAirConMode(onOffStr.toInt(), opModeStr.toInt());
+   setAirConMode(onOffStr.toInt(), (OperationMode) opModeStr.toInt());
 
    LOG1("Temp in: %d, temp out %d, temp set %d\n", acInsideTemp.load(), acOutsideTemp.load(), acSetTemp.load());
 }

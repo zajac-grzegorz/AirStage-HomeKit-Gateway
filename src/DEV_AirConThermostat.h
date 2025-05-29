@@ -77,6 +77,14 @@ struct AirConThermostat : Service::Thermostat
          LOG1("Current Temperature is now %s\n", temp2String(currentTemp.getNewVal<float>()).c_str());
       }
 
+      targetState.setVal(acAirConMode.load());
+      // int requstedMode = acAirConMode.load();
+
+      // if ((targetState.timeVal() > AIRCON_UPDATE_TIME_ELAPSED) && (targetState.getVal<int>() != requstedMode))
+      // {
+         
+      // }
+
       switch (targetState.getVal())
       {
          case 0:

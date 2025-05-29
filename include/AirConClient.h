@@ -28,7 +28,7 @@ public:
    void getParams();
    void setParams();
    void toJSON();
-   void setAirConMode(bool on, int mode);
+   void setAirConMode(bool on, OperationMode mode);
 
 private:
    

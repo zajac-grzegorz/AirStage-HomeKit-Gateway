@@ -1,0 +1,13 @@
+AC_ON_OFF       OP_MODE             AC_MODE         DRY_MODE    FAN_ONLY_MODE
+
+ON              OP_AUTO = 0,        AC_AUTO = 3     OFF = 0     OFF = 0
+ON              OP_COOL = 1,        AC_COOL = 2     OFF = 0     OFF = 0
+ON              OP_DRY = 2,         AC_AUTO = 3     ON = 1      OFF = 0
+ON              OP_FAN = 3,         AC_AUTO = 3     OFF = 0     ON = 1
+ON              OP_HEAT = 4         AC_HEAT = 1     OFF = 0     OFF = 0
+
+OFF             OP_AUTO = 0,        AC_OFF = 0      OFF = 0     OFF = 0
+OFF             OP_COOL = 1,        AC_OFF = 0      OFF = 0     OFF = 0
+OFF             OP_DRY = 2,         AC_OFF = 0      ON = 1      OFF = 0
+OFF             OP_FAN = 3,         AC_OFF = 0      OFF = 0     ON = 1
+OFF             OP_HEAT = 4         AC_OFF = 0      OFF = 0     OFF = 0

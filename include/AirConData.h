@@ -33,6 +33,6 @@ inline std::atomic<int> acOutsideTemp(7000);    // 20 degrees C
 inline std::atomic<int> acSetTemp(0);
 inline std::atomic<int> acFanSpeed((int) FanSpeed::FS_AUTO);
 inline std::atomic<int> acAirConMode((int) AirConMode::AC_OFF);
-inline std::atomic_flag acDryMode(false);
-inline std::atomic_flag acFanOnlyMode(false);
+inline std::atomic<bool> acDryMode(false);
+inline std::atomic<bool> acFanOnlyMode(false);
 
